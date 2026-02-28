@@ -4,7 +4,7 @@ import axios from "axios";
 import ProductCard from "../components/ProductCard";
 import { User } from "lucide-react";
 
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export default function ProfilePage() {
     const { userId } = useParams();

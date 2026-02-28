@@ -5,7 +5,7 @@ import ProductCard from "../components/ProductCard";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Mock API base URL - in production use env var
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export default function HomePage() {
     const [searchParams, setSearchParams] = useSearchParams();
