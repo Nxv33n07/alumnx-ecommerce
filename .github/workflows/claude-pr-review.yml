@@ -42,18 +42,17 @@ jobs:
                 max_tokens: 1024,
                 messages: [{
                   role: "user",
-                  content: ("You are an expert code reviewer. Review this PR diff and respond in this exact format:\n\n## 🐛 Bug Risks\n- List potential bugs, null issues, edge cases. If none: say None found.\n\n## 💡 Suggestions\n- List improvements for readability/performance/best practices. If none: say Looks good!\n\n## ✅ Summary\nOne line verdict.\n\n💬 Tip: Comment **hey claude** on this PR to ask me anything about these changes!\n\nPR Title: " + $title + "\n\nDiff:\n" + $diff)
+                  content: ("You are an expert code reviewer. Review this PR diff and respond in this exact format:\n\n## 🐛 Bug Risks\n- List potential bugs, null issues, edge cases. If none: say None found.\n\n## 💡 Suggestions\n- List improvements for readability/performance/best practices. If none: say Looks good!\n\n## ✅ Summary\nOne line verdict.\n\n💬 Tip: Comment hey claude <your question> on this PR to ask me anything!\n\nPR Title: " + $title + "\n\nDiff:\n" + $diff)
                 }]
               }'
             )")
 
           REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text')
 
+          # ✅ Write to file to avoid YAML/shell quoting issues
+          printf "## 🤖 Claude AI Code Review\n\n%s\n\n---\n*Automated review by Claude · PR #%s*" \
+            "$REVIEW" "$PR_NUMBER" > comment_body.md
+
           gh pr comment $PR_NUMBER \
             --repo $REPO \
-            --body "## 🤖 Claude AI Code Review
-
-$REVIEW
-
----
-*Automated review by Claude · PR #$PR_NUMBER*"
+            --body-file comment_body.md

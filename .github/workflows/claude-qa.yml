@@ -2,16 +2,16 @@ name: 2. Claude Q&A (hey claude)
 
 on:
   issue_comment:
-    types: [created]  # Triggers on every new PR comment
+    types: [created]
 
 jobs:
   claude-answer:
-    # Only runs if:
-    # 1. Comment is on a PR (not an issue)
-    # 2. Comment contains "hey claude" (case-insensitive)
     if: |
-      github.event.issue.pull_request &&
-      contains(toLower(github.event.comment.body), 'hey claude')
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      contains(github.event.comment.body, 'hey claude') &&
+      !contains(github.event.comment.body, 'conflict') &&
+      !contains(github.event.comment.body, 'merge')
 
     runs-on: ubuntu-latest
     permissions:
@@ -62,11 +62,9 @@ jobs:
 
           ANSWER=$(echo "$RESPONSE" | jq -r '.content[0].text')
 
+          printf "Hey @%s 👋\n\n%s\n\n---\n*Claude AI · Reply to your question*" \
+            "$COMMENTER" "$ANSWER" > comment_body.md
+
           gh pr comment $PR_NUMBER \
             --repo $REPO \
-            --body "Hey @$COMMENTER 👋
-
-$ANSWER
-
----
-*Claude AI · Reply to your question*"
+            --body-file comment_body.md

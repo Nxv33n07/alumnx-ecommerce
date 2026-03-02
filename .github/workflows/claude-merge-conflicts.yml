@@ -1,12 +1,8 @@
 name: 3. Claude Merge Conflict Helper
 
-# Test change to verify PR and merge conflict system - 2026-03-02
 on:
-  # Auto-detect when PR becomes conflicted
   pull_request:
     types: [opened, synchronize, reopened]
-
-  # Also respond when user asks via "hey claude conflict" or "hey claude merge"
   issue_comment:
     types: [created]
 
@@ -34,7 +30,6 @@ jobs:
           if ! git merge --no-commit --no-ff origin/main 2>/dev/null; then
             echo "has_conflict=true" >> $GITHUB_OUTPUT
             git diff --name-only --diff-filter=U > conflicted_files.txt
-            cat conflicted_files.txt
           else
             echo "has_conflict=false" >> $GITHUB_OUTPUT
             git merge --abort 2>/dev/null || true
@@ -50,6 +45,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           CONFLICTED_FILES=$(cat conflicted_files.txt)
+          FILE_LIST=$(sed 's/^/- /' conflicted_files.txt)
 
           RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
             -H "x-api-key: $ANTHROPIC_API_KEY" \
@@ -62,26 +58,19 @@ jobs:
                 max_tokens: 1024,
                 messages: [{
                   role: "user",
-                  content: ("A developer has merge conflicts in their PR. The conflicting files are:\n" + $files + "\n\nGive clear, beginner-friendly step-by-step terminal instructions to resolve these merge conflicts and successfully merge main into their branch. Include what conflict markers look like (<<<<<<, =======, >>>>>>>) and how to resolve them. End with how to push the resolved code.")
+                  content: ("A developer has merge conflicts in their PR. Conflicting files:\n" + $files + "\n\nGive clear, beginner-friendly step-by-step terminal instructions to resolve these merge conflicts. Include what conflict markers look like (<<<<<<, =======, >>>>>>>) and how to resolve them. End with how to push the resolved code.")
                 }]
               }'
             )")
 
           INSTRUCTIONS=$(echo "$RESPONSE" | jq -r '.content[0].text')
 
+          printf "## ⚔️ Merge Conflicts Detected — Hey @%s, here's how to fix it!\n\n**Conflicting files:**\n%s\n\n---\n\n%s\n\n---\n*Claude AI · Auto-detected merge conflict on PR #%s*" \
+            "$PR_AUTHOR" "$FILE_LIST" "$INSTRUCTIONS" "$PR_NUMBER" > comment_body.md
+
           gh pr comment $PR_NUMBER \
             --repo $REPO \
-            --body "## ⚔️ Merge Conflicts Detected — Hey @$PR_AUTHOR, here's how to fix it!
-
-**Conflicting files:**
-$(cat conflicted_files.txt | sed 's/^/- /')
-
----
-
-$INSTRUCTIONS
-
----
-*Claude AI · Auto-detected merge conflict on PR #$PR_NUMBER*"
+            --body-file comment_body.md
 
   # ─────────────────────────────────────────────
   # JOB 2: Respond when user asks "hey claude conflict/merge"
@@ -89,9 +78,10 @@ $INSTRUCTIONS
   on-demand-conflict-help:
     if: |
       github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request &&
-      contains(toLower(github.event.comment.body), 'hey claude') &&
-      (contains(toLower(github.event.comment.body), 'conflict') || contains(toLower(github.event.comment.body), 'merge'))
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      contains(github.event.comment.body, 'hey claude') &&
+      (contains(github.event.comment.body, 'conflict') || contains(github.event.comment.body, 'merge'))
 
     runs-on: ubuntu-latest
     permissions:
@@ -105,7 +95,6 @@ $INSTRUCTIONS
           fetch-depth: 0
 
       - name: Get Conflicted Files
-        id: get-conflicts
         run: |
           git fetch origin main
           if ! git merge --no-commit --no-ff origin/main 2>/dev/null; then
@@ -143,11 +132,9 @@ $INSTRUCTIONS
 
           INSTRUCTIONS=$(echo "$RESPONSE" | jq -r '.content[0].text')
 
+          printf "Hey @%s 👋 Here's how to resolve your merge conflicts:\n\n%s\n\n---\n*Claude AI · Merge Conflict Helper*" \
+            "$COMMENTER" "$INSTRUCTIONS" > comment_body.md
+
           gh pr comment $PR_NUMBER \
             --repo $REPO \
-            --body "Hey @$COMMENTER 👋 Here's how to resolve your merge conflicts:
-
-$INSTRUCTIONS
-
----
-*Claude AI · Merge Conflict Helper*"
+            --body-file comment_body.md
